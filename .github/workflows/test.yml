@@ -18,8 +18,28 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v2
+
+            - name: Restore base report
+              uses: actions/download-artifact@v3
+              id: download
+              if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+              continue-on-error: true
+              with:
+                name: test-report
+                path: ./coverage/report.json
+
             - name: Test coverage
               uses: ./ # Uses an action in the root directory
               with:
                   annotations: failed-tests
                   test-script: npm run test:coverage
+                  coverage-file: ./coverage/report.json
+                  base-coverage-file: ${{ steps.download.outputs.download-path }}
+
+            - name: Upload new base report
+              uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3
+              if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+              with:
+                name: test-report
+                path: ./coverage/report.json
+                retention-days: 7
