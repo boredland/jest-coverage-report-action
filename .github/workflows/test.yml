@@ -6,10 +6,13 @@ concurrency:
     cancel-in-progress: true
 
 on:
-    pull_request_target:
+    pull_request:
         paths-ignore:
             - 'docs/**'
     workflow_dispatch:
+    push:
+        branches:
+            - main
 
 jobs:
     coverage:
@@ -18,8 +21,38 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v2
+
+            - name: Download artifact
+              id: download-artifact
+              if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+              uses: dawidd6/action-download-artifact@v2
+              with:
+                branch: github.event.repository.default_branch
+                name: test-report
+                path: ./
+                if_no_artifact_found: warn
+
             - name: Test coverage
+              if: steps.download-artifact.outputs.found_artifacts == 'true'
               uses: ./ # Uses an action in the root directory
               with:
-                  annotations: failed-tests
-                  test-script: npm run test:coverage
+                test-script: npm run test:coverage
+                base-coverage-file: ./report.base.json
+            
+            - name: Test coverage
+              if: steps.download-artifact.outputs.found_artifacts != 'true'
+              uses: ./ # Uses an action in the root directory
+              with:
+                test-script: npm run test:coverage
+            
+            - name: Copy coverage report
+              if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+              run: cp ./report.json ./report.base.json
+
+            - name: Upload new base report
+              uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3
+              if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+              with:
+                name: test-report
+                path: ./report.base.json
+                retention-days: 7
